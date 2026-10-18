@@ -51,6 +51,7 @@ export function Inicio({ nombre, enLinea, cola, sinCatalogo, onIr }: Props) {
           <span><strong>Mis envíos</strong><small>Pendientes, aprobados y rechazados</small></span>
         </button>
       </nav>
+      <p className="suave pequeno version">Versión {__VERSION__}</p>
     </div>
   );
 }

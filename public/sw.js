@@ -1,7 +1,7 @@
 // Guarda la app en el teléfono para abrirla sin señal.
 // Las peticiones a la base de datos (supabase.co) nunca se guardan aquí:
 // los datos sin enviar viven en la cola de la app.
-const CACHE = "ciaa-operarios-v1";
+const CACHE = "ciaa-operarios-v2";
 const BASE = new URL("./", self.location).pathname;
 
 self.addEventListener("install", (e) => {
@@ -23,7 +23,8 @@ self.addEventListener("fetch", (e) => {
   // Página: primero la red (para recibir actualizaciones), si no hay, la copia
   if (e.request.mode === "navigate") {
     e.respondWith(
-      fetch(e.request)
+      // «no-cache»: siempre pregunta al servidor, aunque GitHub Pages diga que se puede guardar 10 minutos
+      fetch(e.request, { cache: "no-cache" })
         .then((r) => {
           const copia = r.clone();
           caches.open(CACHE).then((c) => c.put(BASE, copia));
