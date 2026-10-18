@@ -1,0 +1,16 @@
+{
+  "name": "CIAA Operarios",
+  "short_name": "Operarios",
+  "description": "Registro de producción, uniformidad y ventas de la granja del CIAA.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B2545",
+  "theme_color": "#0B2545",
+  "lang": "es-HN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
