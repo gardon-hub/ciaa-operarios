@@ -82,21 +82,21 @@ it("no envía si los dañados superan el total", async () => {
   expect(rpc).not.toHaveBeenCalledWith("op_enviar_captura", expect.anything());
 });
 
-it("calcula la uniformidad y exige 10 aves", async () => {
+it("envía el peso promedio y la uniformidad de la aplicación de pesaje", async () => {
   render(<App />);
   await abrir("Uniformidad");
-  const entrada = screen.getByPlaceholderText("Ej. 1580");
-  for (const p of [1500, 1550, 1600, 1620, 1580, 1490, 1610, 1570, 1300]) {
-    fireEvent.change(entrada, { target: { value: String(p) } });
-    fireEvent.click(screen.getByText("Agregar"));
-  }
+  escribir("Peso promedio (gramos)", "2017.65");
   fireEvent.click(screen.getByText("Enviar"));
-  expect(await screen.findByText(/al menos 10 aves \(llevas 9\)/)).toBeTruthy();
-  fireEvent.change(entrada, { target: { value: "1900" } });
-  fireEvent.click(screen.getByText("Agregar"));
-  expect(screen.getByText("80 %")).toBeTruthy();
+  expect(await screen.findByText(/Escribe la uniformidad/)).toBeTruthy();
+  escribir("Uniformidad (%)", "86,5");
   fireEvent.click(screen.getByText("Enviar"));
   await screen.findByText("Enviado");
+  await waitFor(() =>
+    expect(rpc).toHaveBeenCalledWith("op_enviar_captura", expect.objectContaining({
+      p_tipo: "uniformidad",
+      p_datos: { peso_ave_g: 2017.65, uniformidad_pct: 86.5 },
+    })),
+  );
 });
 
 it("registra una venta con el precio sugerido", async () => {

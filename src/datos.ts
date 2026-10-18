@@ -38,33 +38,6 @@ export function nuevoId(): string {
   return crypto.randomUUID();
 }
 
-// ---------- Uniformidad ----------
-
-export interface ResultadoUniformidad {
-  n: number;
-  media: number;
-  uniformidad: number;
-  min: number;
-  max: number;
-}
-
-/**
- * Peso promedio y % de aves dentro de ±10 % del promedio.
- * Redondeo igual al de la base de datos (1 decimal), que recalcula al recibir.
- */
-export function calcularUniformidad(pesos: number[]): ResultadoUniformidad | null {
-  if (pesos.length === 0) return null;
-  const media = pesos.reduce((a, b) => a + b, 0) / pesos.length;
-  const dentro = pesos.filter((p) => p >= media * 0.9 && p <= media * 1.1).length;
-  return {
-    n: pesos.length,
-    media: Math.round(media * 10) / 10,
-    uniformidad: Math.round((1000 * dentro) / pesos.length) / 10,
-    min: Math.min(...pesos),
-    max: Math.max(...pesos),
-  };
-}
-
 // ---------- Catálogo (con copia en el teléfono para usarlo sin señal) ----------
 
 const CLAVE_CATALOGO = "ciaa-op-catalogo";

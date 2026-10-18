@@ -40,7 +40,7 @@ export function Inicio({ nombre, enLinea, cola, sinCatalogo, onIr }: Props) {
         </button>
         <button className="tarjeta-boton" onClick={() => onIr({ id: "uniformidad" })} disabled={sinCatalogo}>
           <span className="emoji" aria-hidden>⚖️</span>
-          <span><strong>Uniformidad</strong><small>Pesos de la muestra de aves</small></span>
+          <span><strong>Uniformidad</strong><small>Peso promedio y % de uniformidad</small></span>
         </button>
         <button className="tarjeta-boton" onClick={() => onIr({ id: "venta" })} disabled={sinCatalogo}>
           <span className="emoji" aria-hidden>🧾</span>

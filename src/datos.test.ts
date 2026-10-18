@@ -4,25 +4,7 @@ vi.mock("./supabase", () => ({ supabase: {} }));
 
 const FOTO = "data:image/jpeg;base64,/9j/AAAA";
 
-import { calcularUniformidad, encolar, enviarCola, hoyHN, leerCola } from "./datos";
-
-describe("calcularUniformidad", () => {
-  it("calcula promedio y % dentro de ±10 % igual que la base de datos", () => {
-    // Mismo ejemplo que la prueba de la migración: promedio 1572 g, 80 %
-    const r = calcularUniformidad([1500, 1550, 1600, 1620, 1580, 1490, 1610, 1570, 1300, 1900])!;
-    expect(r).toEqual({ n: 10, media: 1572, uniformidad: 80, min: 1300, max: 1900 });
-  });
-
-  it("redondea a un decimal", () => {
-    const r = calcularUniformidad([1000, 1000, 1001])!;
-    expect(r.media).toBe(1000.3);
-    expect(r.uniformidad).toBe(100);
-  });
-
-  it("devuelve null sin pesos", () => {
-    expect(calcularUniformidad([])).toBeNull();
-  });
-});
+import { encolar, enviarCola, hoyHN, leerCola } from "./datos";
 
 describe("hoyHN", () => {
   it("usa la hora de Honduras (UTC-6)", () => {

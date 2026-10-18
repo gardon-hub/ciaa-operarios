@@ -16,10 +16,10 @@ function resumen(tipo: TipoCaptura, datos: Datos, catalogo: Catalogo | null): st
     return partes.join(" · ") || "Producción";
   }
   if (tipo === "uniformidad") {
-    const n = Array.isArray(datos.pesos) ? datos.pesos.length : 0;
-    return datos.uniformidad_pct !== undefined
-      ? `${n} aves · ${datos.peso_ave_g} g · ${datos.uniformidad_pct} %`
-      : `${n} aves pesadas`;
+    return [
+      datos.peso_ave_g !== undefined && `${Number(datos.peso_ave_g).toLocaleString("es-HN")} g promedio`,
+      datos.uniformidad_pct !== undefined && `${datos.uniformidad_pct} % uniformidad`,
+    ].filter(Boolean).join(" · ") || "Uniformidad";
   }
   const cliente = catalogo?.clientes.find((c) => c.id === datos.cliente_id)?.nombre ?? "Cliente";
   const producto = catalogo?.productos.find((p) => p.id === datos.producto_id)?.nombre ?? "producto";
