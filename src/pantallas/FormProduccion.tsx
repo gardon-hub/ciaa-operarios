@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { comprimirFoto } from "../foto";
 import { hoyHN } from "../datos";
 import { aNumero, BotonEnviar, Campo, CampoFecha, CampoNotas, Formulario, loteInicial, SelectorLote, useEnvio, type PropsFormulario } from "./comunes";
 
@@ -26,11 +27,30 @@ export function FormProduccion({ catalogo, corregir, onVolver, onEnviado }: Prop
     Object.fromEntries(CAMPOS.map((c) => [c.clave, d[c.clave] !== undefined ? String(d[c.clave]) : ""])),
   );
   const [notas, setNotas] = useState(String(d.observaciones ?? ""));
+  const [lectura, setLectura] = useState(d.lectura_medidor_gal !== undefined ? String(d.lectura_medidor_gal) : "");
+  const [foto, setFoto] = useState<string | null>(null);
+  const [procesandoFoto, setProcesandoFoto] = useState(false);
+  const fotoAnterior = typeof d.foto_medidor === "string" ? d.foto_medidor : null;
   const { enviar, guardando, error, setError } = useEnvio("produccion", { corregir, onEnviado });
 
   const nCartones = aNumero(cartones);
   const nSueltos = aNumero(sueltos);
   const total = nCartones === null && nSueltos === null ? null : (nCartones ?? 0) * HUEVOS_POR_CARTON + (nSueltos ?? 0);
+
+  const alElegirFoto = async (e: ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo) return;
+    setProcesandoFoto(true);
+    try {
+      setFoto(await comprimirFoto(archivo));
+      setError("");
+    } catch {
+      setError("No se pudo leer la foto. Vuelve a tomarla.");
+    } finally {
+      setProcesandoFoto(false);
+    }
+  };
 
   const alEnviar = (e: FormEvent) => {
     e.preventDefault();
@@ -47,11 +67,21 @@ export function FormProduccion({ catalogo, corregir, onVolver, onEnviado }: Prop
       if (ENTEROS.has(c.clave) && !Number.isInteger(n)) return setError(`«${c.etiqueta}» debe ser un número entero.`);
       datos[c.clave] = n;
     }
+    const nLectura = aNumero(lectura);
+    if (nLectura !== null) {
+      if (Number.isNaN(nLectura) || nLectura < 0) return setError("Revisa la lectura del medidor.");
+      if (Math.round(nLectura * 100) !== nLectura * 100) return setError("La lectura del medidor lleva como máximo 2 decimales.");
+      if (!foto && !fotoAnterior) return setError("Toma la foto del medidor.");
+      datos.lectura_medidor_gal = nLectura;
+      if (!foto && fotoAnterior) datos.foto_medidor = fotoAnterior;
+    } else if (foto) {
+      return setError("Escribe la lectura que se ve en la foto del medidor.");
+    }
     if (Object.keys(datos).length === 0) return setError("Escribe al menos un dato.");
     const danados = Number(datos.huevos_sucios ?? 0) + Number(datos.huevos_quebrados ?? 0) + Number(datos.huevos_eliminados ?? 0);
     if (total !== null && danados > total) return setError("Los huevos sucios, quebrados y eliminados suman más que el total.");
     if (notas.trim()) datos.observaciones = notas.trim();
-    void enviar(lote, fecha, datos);
+    void enviar(lote, fecha, datos, foto ?? undefined);
   };
 
   return (
@@ -77,6 +107,22 @@ export function FormProduccion({ catalogo, corregir, onVolver, onEnviado }: Prop
             ayuda={"ayuda" in c ? c.ayuda : undefined}
           />
         ))}
+        <fieldset className="grupo">
+          <legend>Medidor de agua (5:00 pm)</legend>
+          <Campo
+            etiqueta="Lectura del medidor"
+            valor={lectura}
+            onCambio={setLectura}
+            decimal
+            ayuda="Todos los números negros y el que gira; el rojo va después del punto. Ej.: 209625.0"
+          />
+          <label className="boton secundario foto-boton">
+            <input type="file" accept="image/*" capture="environment" onChange={alElegirFoto} hidden />
+            {procesandoFoto ? "Procesando foto…" : foto || fotoAnterior ? "📷 Cambiar foto del medidor" : "📷 Tomar foto del medidor"}
+          </label>
+          {foto && <img src={foto} alt="Foto del medidor" className="foto-previa" />}
+          {!foto && fotoAnterior && <p className="suave pequeno">Se conserva la foto que enviaste antes.</p>}
+        </fieldset>
         <CampoNotas valor={notas} onCambio={setNotas} />
         <BotonEnviar guardando={guardando} corrigiendo={!!corregir} error={error} />
       </form>

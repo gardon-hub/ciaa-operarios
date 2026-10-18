@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./supabase", () => ({ supabase: {} }));
 
+const FOTO = "data:image/jpeg;base64,/9j/AAAA";
+
 import { calcularUniformidad, encolar, enviarCola, hoyHN, leerCola } from "./datos";
 
 describe("calcularUniformidad", () => {
@@ -67,5 +69,59 @@ describe("cola de envíos", () => {
     const otra = vi.fn(async () => ({ error: null }));
     await enviarCola(otra);
     expect(otra).not.toHaveBeenCalled();
+  });
+});
+
+describe("cola con foto del medidor", () => {
+  beforeEach(() => localStorage.clear());
+
+  const conFoto = {
+    client_uuid: "c1",
+    tipo: "produccion" as const,
+    lote_id: "l",
+    fecha: "2026-10-18",
+    datos: { lectura_medidor_gal: 209625 },
+    foto: FOTO,
+  };
+  const uid = async () => "u1";
+
+  it("sube la foto a la carpeta del operario y la enlaza al envío", async () => {
+    encolar(conFoto);
+    const subidas: string[] = [];
+    const rpc = vi.fn(async () => ({ error: null }));
+    await enviarCola(rpc, async (ruta, archivo) => {
+      subidas.push(`${ruta}:${archivo.type}`);
+      return { error: null };
+    }, uid);
+    expect(subidas).toEqual(["u1/c1.jpg:image/jpeg"]);
+    expect(rpc).toHaveBeenCalledWith("op_enviar_captura", expect.objectContaining({
+      p_datos: { lectura_medidor_gal: 209625, foto_medidor: "u1/c1.jpg" },
+    }));
+    expect(leerCola()).toEqual([]);
+  });
+
+  it("si la foto ya estaba subida (intento cortado), continúa", async () => {
+    encolar(conFoto);
+    const rpc = vi.fn(async () => ({ error: null }));
+    await enviarCola(rpc, async () => ({ error: { message: "The resource already exists", statusCode: "409" } }), uid);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(leerCola()).toEqual([]);
+  });
+
+  it("sin señal conserva la foto para reintentar", async () => {
+    encolar(conFoto);
+    const rpc = vi.fn(async () => ({ error: null }));
+    await enviarCola(rpc, async () => ({ error: { message: "Failed to fetch" } }), uid);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(leerCola()).toMatchObject([{ client_uuid: "c1", foto: FOTO }]);
+    expect(leerCola()[0].error).toBeUndefined();
+  });
+
+  it("un rechazo al subir la foto se marca como error", async () => {
+    encolar(conFoto);
+    const rpc = vi.fn(async () => ({ error: null }));
+    await enviarCola(rpc, async () => ({ error: { message: "new row violates row-level security policy", statusCode: "403" } }), uid);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(leerCola()[0].error).toMatch(/No se pudo subir la foto/);
   });
 });

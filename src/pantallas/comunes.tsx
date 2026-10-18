@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { corregirEnvio, encolar, hoyHN, nuevoId, type CapturaServidor, type Catalogo, type Datos, type TipoCaptura } from "../datos";
 
 export interface PropsFormulario {
@@ -36,12 +36,19 @@ export function Campo({ etiqueta, valor, onCambio, ayuda, decimal = false }: {
   ayuda?: string;
   decimal?: boolean;
 }) {
+  const id = useId();
   return (
-    <label className="campo">
-      <span>{etiqueta}</span>
-      <input inputMode={decimal ? "decimal" : "numeric"} value={valor} onChange={(e) => onCambio(e.target.value)} />
-      {ayuda && <small className="suave">{ayuda}</small>}
-    </label>
+    <div className="campo">
+      <label htmlFor={id}>{etiqueta}</label>
+      <input
+        id={id}
+        inputMode={decimal ? "decimal" : "numeric"}
+        value={valor}
+        onChange={(e) => onCambio(e.target.value)}
+        aria-describedby={ayuda ? `${id}-ayuda` : undefined}
+      />
+      {ayuda && <small id={`${id}-ayuda`} className="suave">{ayuda}</small>}
+    </div>
   );
 }
 
@@ -88,12 +95,12 @@ export function useEnvio(tipo: TipoCaptura, { corregir, onEnviado }: Pick<PropsF
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  const enviar = async (loteId: string | null, fecha: string, datos: Datos) => {
+  const enviar = async (loteId: string | null, fecha: string, datos: Datos, foto?: string) => {
     setError("");
     if (corregir) {
       setGuardando(true);
       try {
-        await corregirEnvio(corregir.id, loteId, fecha, datos);
+        await corregirEnvio(corregir.id, loteId, fecha, datos, foto);
         onEnviado(false, true);
       } catch (e) {
         setError(e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e));
@@ -102,7 +109,12 @@ export function useEnvio(tipo: TipoCaptura, { corregir, onEnviado }: Pick<PropsF
       }
       return;
     }
-    encolar({ client_uuid: nuevoId(), tipo, lote_id: loteId, fecha, datos });
+    try {
+      encolar({ client_uuid: nuevoId(), tipo, lote_id: loteId, fecha, datos, ...(foto ? { foto } : {}) });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
     onEnviado(!navigator.onLine);
   };
 

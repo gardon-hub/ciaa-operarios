@@ -11,6 +11,7 @@ function resumen(tipo: TipoCaptura, datos: Datos, catalogo: Catalogo | null): st
       datos.huevos_total !== undefined && `${Number(datos.huevos_total).toLocaleString("es-HN")} huevos`,
       datos.aves_muertas !== undefined && `${datos.aves_muertas} muertas`,
       datos.alimento_lb !== undefined && `${datos.alimento_lb} lb alimento`,
+      datos.lectura_medidor_gal !== undefined && `medidor ${datos.lectura_medidor_gal}`,
     ].filter(Boolean);
     return partes.join(" · ") || "Producción";
   }

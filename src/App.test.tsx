@@ -28,6 +28,11 @@ vi.mock("./supabase", () => ({
   },
 }));
 
+vi.mock("./foto", async (original) => ({
+  ...(await original<typeof import("./foto")>()),
+  comprimirFoto: async () => "data:image/jpeg;base64,/9j/AAAA",
+}));
+
 import { App } from "./App";
 
 beforeEach(() => {
@@ -131,4 +136,23 @@ it("rechaza cuentas que no son de operario", async () => {
   roles.mockResolvedValue({ data: [{ role: "admin" }], error: null });
   render(<App />);
   expect(await screen.findByText("Esta app es solo para operarios")).toBeTruthy();
+});
+
+it("la lectura del medidor exige la foto y la guarda con el envío", async () => {
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+  localStorage.setItem("ciaa-op-catalogo", JSON.stringify(catalogo));
+  render(<App />);
+  await abrir("Producción del día");
+  escribir("Lectura del medidor", "209625.0");
+  fireEvent.click(screen.getByText("Enviar"));
+  expect(await screen.findByText("Toma la foto del medidor.")).toBeTruthy();
+  const archivo = new File(["x"], "medidor.jpg", { type: "image/jpeg" });
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [archivo] } });
+  expect(await screen.findByAltText("Foto del medidor")).toBeTruthy();
+  fireEvent.click(screen.getByText("Enviar"));
+  expect(await screen.findByText("Guardado en el teléfono")).toBeTruthy();
+  const [envio] = JSON.parse(localStorage.getItem("ciaa-op-cola")!);
+  expect(envio).toMatchObject({ datos: { lectura_medidor_gal: 209625 }, foto: "data:image/jpeg;base64,/9j/AAAA" });
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
 });

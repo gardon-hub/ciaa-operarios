@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { dataUrlABlob } from "./foto";
 
 export type TipoCaptura = "produccion" | "uniformidad" | "venta";
 export type Datos = Record<string, unknown>;
@@ -97,6 +98,8 @@ export interface EnvioEnCola {
   fecha: string;
   datos: Datos;
   creado: string;
+  /** Foto del medidor (JPEG en base64) pendiente de subir */
+  foto?: string;
   /** Mensaje del servidor si rechazó el envío (no se reintenta solo) */
   error?: string;
 }
@@ -117,8 +120,19 @@ function guardarCola(cola: EnvioEnCola[]) {
   window.dispatchEvent(new Event("ciaa-op-cola"));
 }
 
+/** Lanza ErrorSinEspacio si el teléfono no tiene lugar para guardar el envío. */
 export function encolar(envio: Omit<EnvioEnCola, "creado">): void {
-  guardarCola([...leerCola(), { ...envio, creado: new Date().toISOString() }]);
+  try {
+    guardarCola([...leerCola(), { ...envio, creado: new Date().toISOString() }]);
+  } catch {
+    throw new ErrorSinEspacio();
+  }
+}
+
+export class ErrorSinEspacio extends Error {
+  constructor() {
+    super("El teléfono no tiene espacio para guardar este registro sin señal. Envía primero los pendientes con conexión.");
+  }
 }
 
 export function quitarDeCola(clientUuid: string): void {
@@ -126,6 +140,34 @@ export function quitarDeCola(clientUuid: string): void {
 }
 
 type Rpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: { message: string; code?: string } | null }>;
+type Subir = (ruta: string, archivo: Blob) => PromiseLike<{ error: { message: string; statusCode?: string } | null }>;
+
+const subirFoto: Subir = (ruta, archivo) =>
+  supabase.storage.from("capturas").upload(ruta, archivo, { contentType: "image/jpeg", upsert: false }) as unknown as PromiseLike<{
+    error: { message: string; statusCode?: string } | null;
+  }>;
+
+async function usuarioActual(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
+}
+
+/** Ruta de la foto en el almacenamiento: <id del operario>/<id del envío>.jpg */
+export function rutaFoto(uid: string, clientUuid: string): string {
+  return `${uid}/${clientUuid}.jpg`;
+}
+
+/**
+ * Sube la foto. Si ya estaba subida (un intento anterior se cortó después de
+ * subirla) también cuenta como éxito. Devuelve "red" si no hay conexión.
+ */
+async function asegurarFoto(subir: Subir, ruta: string, dataUrl: string): Promise<"ok" | "red" | string> {
+  const { error } = await subir(ruta, dataUrlABlob(dataUrl));
+  if (!error) return "ok";
+  if (error.statusCode === "409" || /exist|duplicate/i.test(error.message)) return "ok";
+  if (/fetch|network|failed/i.test(error.message) || !navigator.onLine) return "red";
+  return `No se pudo subir la foto: ${error.message}`;
+}
 
 /**
  * Error de la base de datos (validación, permisos): el envío no va a pasar
@@ -135,28 +177,49 @@ function esRechazoDelServidor(error: { code?: string }): boolean {
   return typeof error.code === "string" && error.code.length > 0;
 }
 
+function marcarError(clientUuid: string, mensaje: string) {
+  guardarCola(leerCola().map((e) => (e.client_uuid === clientUuid ? { ...e, error: mensaje } : e)));
+}
+
 let enviando = false;
 
 /** Envía la cola en orden. Devuelve cuántos se enviaron. */
-export async function enviarCola(rpc: Rpc = (fn, args) => supabase.rpc(fn, args)): Promise<number> {
+export async function enviarCola(
+  rpc: Rpc = (fn, args) => supabase.rpc(fn, args),
+  subir: Subir = subirFoto,
+  uid: () => Promise<string | null> = usuarioActual,
+): Promise<number> {
   if (enviando) return 0;
   enviando = true;
   let enviados = 0;
   try {
     for (const envio of leerCola()) {
       if (envio.error) continue;
+      let datos = envio.datos;
+      if (envio.foto) {
+        const usuario = await uid();
+        if (!usuario) break;
+        const ruta = rutaFoto(usuario, envio.client_uuid);
+        const r = await asegurarFoto(subir, ruta, envio.foto);
+        if (r === "red") break;
+        if (r !== "ok") {
+          marcarError(envio.client_uuid, r);
+          continue;
+        }
+        datos = { ...datos, foto_medidor: ruta };
+      }
       const { error } = await rpc("op_enviar_captura", {
         p_client_uuid: envio.client_uuid,
         p_tipo: envio.tipo,
         p_lote_id: envio.lote_id,
         p_fecha: envio.fecha,
-        p_datos: envio.datos,
+        p_datos: datos,
       });
       if (!error) {
         quitarDeCola(envio.client_uuid);
         enviados++;
       } else if (esRechazoDelServidor(error)) {
-        guardarCola(leerCola().map((e) => (e.client_uuid === envio.client_uuid ? { ...e, error: error.message } : e)));
+        marcarError(envio.client_uuid, error.message);
       } else {
         break; // sin conexión: se intenta más tarde
       }
@@ -177,7 +240,17 @@ export async function misEnvios(): Promise<CapturaServidor[]> {
   return (data ?? []) as CapturaServidor[];
 }
 
-export async function corregirEnvio(id: string, loteId: string | null, fecha: string, datos: Datos): Promise<void> {
+export async function corregirEnvio(id: string, loteId: string | null, fecha: string, datos: Datos, fotoNueva?: string): Promise<void> {
+  if (fotoNueva) {
+    // Una foto nueva va con un nombre nuevo: las subidas no reemplazan archivos
+    const usuario = await usuarioActual();
+    if (!usuario) throw new Error("Vuelve a iniciar sesión");
+    const ruta = rutaFoto(usuario, nuevoId());
+    const r = await asegurarFoto(subirFoto, ruta, fotoNueva);
+    if (r === "red") throw new Error("Sin conexión: las correcciones necesitan señal.");
+    if (r !== "ok") throw new Error(r);
+    datos = { ...datos, foto_medidor: ruta };
+  }
   const { error } = await supabase.rpc("op_corregir_captura", {
     p_id: id,
     p_lote_id: loteId,
