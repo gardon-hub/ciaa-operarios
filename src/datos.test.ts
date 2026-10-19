@@ -107,3 +107,27 @@ describe("cola con foto del medidor", () => {
     expect(leerCola()[0].error).toMatch(/No se pudo subir la foto/);
   });
 });
+
+describe("cola con foto del recibo", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("enlaza la foto en foto_recibo", async () => {
+    encolar({
+      client_uuid: "v1",
+      tipo: "venta",
+      lote_id: null,
+      fecha: "2026-10-19",
+      datos: { cliente_id: "c", producto_id: "p", cantidad: 4, precio_unitario: 105 },
+      foto: FOTO,
+      campoFoto: "foto_recibo",
+    });
+    const rpc = vi.fn(async () => ({ error: null }));
+    await enviarCola(rpc, async () => ({ error: null }), async () => "u1");
+    expect(rpc).toHaveBeenCalledWith("op_enviar_captura", expect.objectContaining({
+      p_tipo: "venta",
+      p_datos: expect.objectContaining({ foto_recibo: "u1/v1.jpg" }),
+    }));
+    const datos = (rpc.mock.calls[0] as unknown as [string, { p_datos: Record<string, unknown> }])[1].p_datos;
+    expect(datos).not.toHaveProperty("foto_medidor");
+  });
+});

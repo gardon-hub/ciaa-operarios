@@ -64,6 +64,9 @@ export async function actualizarCatalogo(): Promise<Catalogo> {
 
 // ---------- Cola de envíos ----------
 
+/** Campo de la captura donde va la ruta de la foto */
+export type CampoFoto = "foto_medidor" | "foto_recibo";
+
 export interface EnvioEnCola {
   client_uuid: string;
   tipo: TipoCaptura;
@@ -71,8 +74,10 @@ export interface EnvioEnCola {
   fecha: string;
   datos: Datos;
   creado: string;
-  /** Foto del medidor (JPEG en base64) pendiente de subir */
+  /** Foto (JPEG en base64) pendiente de subir */
   foto?: string;
+  /** Dónde va la foto; los envíos guardados antes de existir el recibo son del medidor */
+  campoFoto?: CampoFoto;
   /** Mensaje del servidor si rechazó el envío (no se reintenta solo) */
   error?: string;
 }
@@ -179,7 +184,7 @@ export async function enviarCola(
           marcarError(envio.client_uuid, r);
           continue;
         }
-        datos = { ...datos, foto_medidor: ruta };
+        datos = { ...datos, [envio.campoFoto ?? "foto_medidor"]: ruta };
       }
       const { error } = await rpc("op_enviar_captura", {
         p_client_uuid: envio.client_uuid,
@@ -213,7 +218,14 @@ export async function misEnvios(): Promise<CapturaServidor[]> {
   return (data ?? []) as CapturaServidor[];
 }
 
-export async function corregirEnvio(id: string, loteId: string | null, fecha: string, datos: Datos, fotoNueva?: string): Promise<void> {
+export async function corregirEnvio(
+  id: string,
+  loteId: string | null,
+  fecha: string,
+  datos: Datos,
+  fotoNueva?: string,
+  campoFoto: CampoFoto = "foto_medidor",
+): Promise<void> {
   if (fotoNueva) {
     // Una foto nueva va con un nombre nuevo: las subidas no reemplazan archivos
     const usuario = await usuarioActual();
@@ -222,7 +234,7 @@ export async function corregirEnvio(id: string, loteId: string | null, fecha: st
     const r = await asegurarFoto(subirFoto, ruta, fotoNueva);
     if (r === "red") throw new Error("Sin conexión: las correcciones necesitan señal.");
     if (r !== "ok") throw new Error(r);
-    datos = { ...datos, foto_medidor: ruta };
+    datos = { ...datos, [campoFoto]: ruta };
   }
   const { error } = await supabase.rpc("op_corregir_captura", {
     p_id: id,

@@ -1,7 +1,6 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
-import { comprimirFoto } from "../foto";
+import { useState, type FormEvent } from "react";
 import { hoyHN } from "../datos";
-import { aNumero, BotonEnviar, Campo, CampoFecha, CampoNotas, Formulario, loteInicial, SelectorLote, useEnvio, type PropsFormulario } from "./comunes";
+import { aNumero, BotonEnviar, Campo, CampoFecha, CampoFotoCamara, CampoNotas, Formulario, loteInicial, SelectorLote, useEnvio, type PropsFormulario } from "./comunes";
 
 const HUEVOS_POR_CARTON = 30;
 
@@ -29,28 +28,12 @@ export function FormProduccion({ catalogo, corregir, onVolver, onEnviado }: Prop
   const [notas, setNotas] = useState(String(d.observaciones ?? ""));
   const [lectura, setLectura] = useState(d.lectura_medidor_gal !== undefined ? String(d.lectura_medidor_gal) : "");
   const [foto, setFoto] = useState<string | null>(null);
-  const [procesandoFoto, setProcesandoFoto] = useState(false);
   const fotoAnterior = typeof d.foto_medidor === "string" ? d.foto_medidor : null;
   const { enviar, guardando, error, setError } = useEnvio("produccion", { corregir, onEnviado });
 
   const nCartones = aNumero(cartones);
   const nSueltos = aNumero(sueltos);
   const total = nCartones === null && nSueltos === null ? null : (nCartones ?? 0) * HUEVOS_POR_CARTON + (nSueltos ?? 0);
-
-  const alElegirFoto = async (e: ChangeEvent<HTMLInputElement>) => {
-    const archivo = e.target.files?.[0];
-    e.target.value = "";
-    if (!archivo) return;
-    setProcesandoFoto(true);
-    try {
-      setFoto(await comprimirFoto(archivo));
-      setError("");
-    } catch {
-      setError("No se pudo leer la foto. Vuelve a tomarla.");
-    } finally {
-      setProcesandoFoto(false);
-    }
-  };
 
   const alEnviar = (e: FormEvent) => {
     e.preventDefault();
@@ -81,7 +64,7 @@ export function FormProduccion({ catalogo, corregir, onVolver, onEnviado }: Prop
     const danados = Number(datos.huevos_sucios ?? 0) + Number(datos.huevos_quebrados ?? 0) + Number(datos.huevos_eliminados ?? 0);
     if (total !== null && danados > total) return setError("Los huevos sucios, quebrados y eliminados suman más que el total.");
     if (notas.trim()) datos.observaciones = notas.trim();
-    void enviar(lote, fecha, datos, foto ?? undefined);
+    void enviar(lote, fecha, datos, foto ?? undefined, "foto_medidor");
   };
 
   return (
@@ -116,12 +99,7 @@ export function FormProduccion({ catalogo, corregir, onVolver, onEnviado }: Prop
             decimal
             ayuda="Todos los números negros y el que gira; el rojo va después del punto. Ej.: 209625.0"
           />
-          <label className="boton secundario foto-boton">
-            <input type="file" accept="image/*" capture="environment" onChange={alElegirFoto} hidden />
-            {procesandoFoto ? "Procesando foto…" : foto || fotoAnterior ? "📷 Cambiar foto del medidor" : "📷 Tomar foto del medidor"}
-          </label>
-          {foto && <img src={foto} alt="Foto del medidor" className="foto-previa" />}
-          {!foto && fotoAnterior && <p className="suave pequeno">Se conserva la foto que enviaste antes.</p>}
+          <CampoFotoCamara que="del medidor" foto={foto} anterior={!!fotoAnterior} onFoto={setFoto} onError={setError} />
         </fieldset>
         <CampoNotas valor={notas} onCambio={setNotas} />
         <BotonEnviar guardando={guardando} corrigiendo={!!corregir} error={error} />

@@ -99,7 +99,10 @@ it("envía el peso promedio y la uniformidad de la aplicación de pesaje", async
   );
 });
 
-it("registra una venta con el precio sugerido", async () => {
+it("registra una venta con el precio sugerido y la foto del recibo", async () => {
+  // Sin señal: la venta queda en el teléfono con su foto, lista para subir
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+  localStorage.setItem("ciaa-op-catalogo", JSON.stringify(catalogo));
   render(<App />);
   await abrir("Venta");
   escribir("Cliente", "cli-1");
@@ -107,13 +110,20 @@ it("registra una venta con el precio sugerido", async () => {
   escribir("Cantidad (carton)", "4");
   expect(screen.getByText("L 420.00")).toBeTruthy();
   fireEvent.click(screen.getByText("Enviar"));
-  await screen.findByText("Enviado");
-  await waitFor(() =>
-    expect(rpc).toHaveBeenCalledWith("op_enviar_captura", expect.objectContaining({
-      p_tipo: "venta",
-      p_datos: expect.objectContaining({ cliente_id: "cli-1", cantidad: 4, precio_unitario: 105, forma_pago: "efectivo" }),
-    })),
-  );
+  expect(await screen.findByText("Toma la foto del recibo de entrega.")).toBeTruthy();
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [new File(["x"], "recibo.jpg", { type: "image/jpeg" })] } });
+  expect(await screen.findByAltText("Foto del recibo")).toBeTruthy();
+  fireEvent.click(screen.getByText("Enviar"));
+  expect(await screen.findByText("Guardado en el teléfono")).toBeTruthy();
+  const [envio] = JSON.parse(localStorage.getItem("ciaa-op-cola")!);
+  expect(envio).toMatchObject({
+    tipo: "venta",
+    datos: { cliente_id: "cli-1", producto_id: "prod-1", cantidad: 4, precio_unitario: 105, forma_pago: "efectivo" },
+    foto: "data:image/jpeg;base64,/9j/AAAA",
+    campoFoto: "foto_recibo",
+  });
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
 });
 
 it("sin señal guarda en el teléfono", async () => {

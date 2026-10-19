@@ -1,5 +1,6 @@
-import { useId, useState, type ReactNode } from "react";
-import { corregirEnvio, encolar, hoyHN, nuevoId, type CapturaServidor, type Catalogo, type Datos, type TipoCaptura } from "../datos";
+import { useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { comprimirFoto } from "../foto";
+import { corregirEnvio, encolar, hoyHN, nuevoId, type CampoFoto, type CapturaServidor, type Catalogo, type Datos, type TipoCaptura } from "../datos";
 
 export interface PropsFormulario {
   catalogo: Catalogo | null;
@@ -95,12 +96,12 @@ export function useEnvio(tipo: TipoCaptura, { corregir, onEnviado }: Pick<PropsF
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  const enviar = async (loteId: string | null, fecha: string, datos: Datos, foto?: string) => {
+  const enviar = async (loteId: string | null, fecha: string, datos: Datos, foto?: string, campoFoto?: CampoFoto) => {
     setError("");
     if (corregir) {
       setGuardando(true);
       try {
-        await corregirEnvio(corregir.id, loteId, fecha, datos, foto);
+        await corregirEnvio(corregir.id, loteId, fecha, datos, foto, campoFoto);
         onEnviado(false, true);
       } catch (e) {
         setError(e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e));
@@ -110,7 +111,7 @@ export function useEnvio(tipo: TipoCaptura, { corregir, onEnviado }: Pick<PropsF
       return;
     }
     try {
-      encolar({ client_uuid: nuevoId(), tipo, lote_id: loteId, fecha, datos, ...(foto ? { foto } : {}) });
+      encolar({ client_uuid: nuevoId(), tipo, lote_id: loteId, fecha, datos, ...(foto ? { foto, campoFoto } : {}) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       return;
@@ -128,6 +129,46 @@ export function BotonEnviar({ guardando, corrigiendo, error }: { guardando: bool
       <button className="boton" disabled={guardando}>
         {guardando ? "Guardando…" : corrigiendo ? "Guardar corrección" : "Enviar"}
       </button>
+    </>
+  );
+}
+
+/**
+ * Botón para tomar una foto con la cámara (se reduce a ~200 KB) y su vista previa.
+ * `anterior` indica que la captura ya tenía una foto enviada (correcciones).
+ */
+export function CampoFotoCamara({ que, foto, anterior, onFoto, onError }: {
+  que: string;
+  foto: string | null;
+  anterior: boolean;
+  onFoto: (dataUrl: string) => void;
+  onError: (mensaje: string) => void;
+}) {
+  const [procesando, setProcesando] = useState(false);
+
+  const alElegir = async (e: ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo) return;
+    setProcesando(true);
+    try {
+      onFoto(await comprimirFoto(archivo));
+      onError("");
+    } catch {
+      onError("No se pudo leer la foto. Vuelve a tomarla.");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  return (
+    <>
+      <label className="boton secundario foto-boton">
+        <input type="file" accept="image/*" capture="environment" onChange={alElegir} hidden />
+        {procesando ? "Procesando foto…" : foto || anterior ? `📷 Cambiar foto ${que}` : `📷 Tomar foto ${que}`}
+      </label>
+      {foto && <img src={foto} alt={`Foto ${que}`} className="foto-previa" />}
+      {!foto && anterior && <p className="suave pequeno">Se conserva la foto que enviaste antes.</p>}
     </>
   );
 }

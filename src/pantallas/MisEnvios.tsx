@@ -23,7 +23,7 @@ function resumen(tipo: TipoCaptura, datos: Datos, catalogo: Catalogo | null): st
   }
   const cliente = catalogo?.clientes.find((c) => c.id === datos.cliente_id)?.nombre ?? "Cliente";
   const producto = catalogo?.productos.find((p) => p.id === datos.producto_id)?.nombre ?? "producto";
-  return `${cliente} · ${datos.cantidad} ${producto}`;
+  return `${cliente} · ${datos.cantidad} ${producto}${datos.foto_recibo ? " · 📷 recibo" : ""}`;
 }
 
 function fechaCorta(iso: string): string {
